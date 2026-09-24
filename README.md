@@ -15,7 +15,7 @@ A unified Gradio voice studio for Nepali text-to-speech and voice cloning, with 
 
 Each backend owns its inference adapter and dependency file. Model weights are never committed to Git. Gated or licensed checkpoints are downloaded at runtime into the Hugging Face cache.
 
-The shared Gradio app lazy-loads and caches each backend in memory, so model initialization is not repeated for every generation request.
+The shared Gradio app lazy-loads and caches each backend in memory, so model initialization is not repeated for every generation request. The UI also provides a four-model comparison workspace, model/license metadata, live text-length validation, and real smoke-test diagnostics.
 
 ## Current status
 
@@ -30,6 +30,11 @@ The shared Gradio app lazy-loads and caches each backend in memory, so model ini
 - [x] Separate dependency files
 - [x] License matrix and third-party notices
 - [ ] Full runtime test matrix on each backend environment
+- [x] Four-model comparison workspace
+- [x] Backend metadata/license matrix in UI
+- [x] Text length validation and live character counter
+- [x] Per-model failure isolation during comparison
+- [x] Lazy backend loading remains enabled
 
 ## Access and licensing
 
