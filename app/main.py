@@ -180,6 +180,7 @@ def build_ui():
                 generation_status = gr.Markdown()
                 output = gr.Audio(label="Generated Audio", type="filepath")
                 download_output = gr.File(label="Download WAV")
+                output_metadata = gr.Markdown()
 
                 def guarded_generate(*args):
                     text_value, backend_value, reference_value, consent_value, *controls = args
@@ -191,7 +192,7 @@ def build_ui():
                 generate_button.click(
                     guarded_generate,
                     [text, backend, reference, consent, exaggeration, temperature, cfg_weight, repetition_penalty],
-                    [output, download_output, generation_status, generation_status],
+                    [output, download_output, output_metadata, generation_status],
                 )
 
             with gr.Tab("⚖️ Compare"):
