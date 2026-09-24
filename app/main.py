@@ -7,6 +7,7 @@ import gradio as gr
 import soundfile as sf
 
 from .config import BACKENDS
+from .diagnostics import backend_status
 
 _ENGINES = {}
 
@@ -219,6 +220,26 @@ def build_ui():
             ],
             output,
         )
+
+        with gr.Accordion("🩺 Backend diagnostics", open=False):
+            diagnostics = gr.Dataframe(
+                headers=["Backend", "Dependency", "Installed", "Access"],
+                datatype=["str", "str", "str", "str"],
+                value=[
+                    [row["name"], row["dependency"], row["installed"], row["access"]]
+                    for row in backend_status()
+                ],
+                interactive=False,
+                label="Local readiness check",
+            )
+            refresh = gr.Button("🔄 Refresh diagnostics")
+            refresh.click(
+                lambda: [
+                    [row["name"], row["dependency"], row["installed"], row["access"]]
+                    for row in backend_status()
+                ],
+                outputs=diagnostics,
+            )
 
         gr.Markdown(
             "⚠️ **Responsible use:** Do not use this tool for impersonation, "
