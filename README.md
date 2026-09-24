@@ -2,7 +2,7 @@
 
 A unified Gradio-based voice studio architecture for Nepali text-to-speech and voice cloning.
 
-## Planned engines
+## Engines
 
 - Chatterbox Nepali
 - Swarlekha
@@ -33,9 +33,17 @@ examples/             # Safe text examples
 - [x] Runtime Hugging Face checkpoint loading
 - [x] Nepali voice-cloning controls
 - [x] Swarlekha adapter
-- [ ] XTTS-v2 Nepali adapter
+- [x] XTTS-v2 Nepali adapter
 - [ ] Pocket-TTS Nepali adapter
 - [ ] Cross-backend test matrix
+
+### XTTS-v2 Nepali
+
+The XTTS backend uses `Oshara/xtts-v2-nepali` and defaults to its recommended `epoch-10` checkpoint. The upstream model card provides a direct `XttsConfig` / `Xtts` loading path and 24 kHz output. citeturn0search1turn0search8
+
+**License warning:** XTTS-v2 Nepali inherits the Coqui Public Model License (CPML). The CPML terms state that the model and its outputs are licensed for non-commercial purposes unless additional rights are obtained. Review the current upstream license before using this backend for monetized production or distributing outputs. citeturn0search0turn0search1
+
+The app does not commit XTTS weights to Git.
 
 ### Chatterbox Nepali
 
@@ -43,6 +51,6 @@ The first working backend uses the gated Imbatmann Nepali checkpoint with the Ch
 
 ## License
 
-The application code will have its own license. Third-party model code, weights, datasets, tokenizers and dependencies remain subject to their respective upstream licenses. See `MODEL_LICENSES.md` and `THIRD_PARTY_NOTICES.md`.
+The application code has its own license. Third-party model code, weights, datasets, tokenizers and dependencies remain subject to their respective upstream licenses. See `MODEL_LICENSES.md` and `THIRD_PARTY_NOTICES.md`.
 
 > This project does not redistribute third-party voice recordings or model checkpoints unless their applicable license and access terms explicitly permit redistribution.
