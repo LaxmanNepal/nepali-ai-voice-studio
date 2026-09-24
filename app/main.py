@@ -9,6 +9,7 @@ import soundfile as sf
 
 from .config import BACKENDS
 from .diagnostics import backend_status, smoke_test
+from .runtime import engine_lock, log_generation_done, log_generation_error, log_generation_start, output_path, runtime_summary
 
 _ENGINES = {}
 MAX_TEXT_CHARS = 2500
@@ -34,10 +35,9 @@ def _get_engine(backend):
 
 
 def _write_wav(wav, sample_rate):
-    output = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    output.close()
-    sf.write(output.name, wav.squeeze().numpy(), sample_rate)
-    return output.name
+    path = output_path(".wav")
+    sf.write(path, wav.squeeze().numpy(), sample_rate)
+    return path
 
 
 def _validate_reference(reference_audio):
@@ -86,14 +86,20 @@ def _generate_with_engine(backend, text, reference_audio, exaggeration, temperat
 def generate(text, backend, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty):
     text = _validate_text(text)
     reference_audio = _validate_reference(reference_audio)
+    started = time.perf_counter()
+    log_generation_start(backend, len(text))
     try:
-        wav, sample_rate = _generate_with_engine(
-            backend, text, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty
-        )
-        return _write_wav(wav, sample_rate)
+        with engine_lock(backend):
+            wav, sample_rate = _generate_with_engine(
+                backend, text, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty
+            )
+        result = _write_wav(wav, sample_rate)
+        log_generation_done(backend, time.perf_counter() - started)
+        return result
     except gr.Error:
         raise
     except Exception as exc:
+        log_generation_error(backend, exc)
         name = BACKENDS.get(backend).name if backend in BACKENDS else backend
         raise gr.Error(f"{name}: {exc}") from exc
 
@@ -207,9 +213,10 @@ def build_ui():
                     for backend_id, info in BACKENDS.items():
                         started = time.perf_counter()
                         try:
-                            wav, sr = _generate_with_engine(
-                                backend_id, text_value, reference_path, exag, temp, cfg, rep
-                            )
+                            with engine_lock(backend_id):
+                                wav, sr = _generate_with_engine(
+                                    backend_id, text_value, reference_path, exag, temp, cfg, rep
+                                )
                             audios.append(_write_wav(wav, sr))
                             messages.append(f"✅ **{info.name}: PASS** — {time.perf_counter()-started:.1f}s")
                         except Exception as exc:
@@ -261,4 +268,4 @@ def build_ui():
 
 
 if __name__ == "__main__":
-    build_ui().launch()
+    build_ui().queue(max_size=8, default_concurrency_limit=1).launch()
