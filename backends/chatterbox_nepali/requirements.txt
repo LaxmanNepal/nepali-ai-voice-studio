@@ -1,0 +1,3 @@
+# Isolated dependency set for the Chatterbox Nepali backend.
+chatterbox-tts
+safetensors>=0.4
