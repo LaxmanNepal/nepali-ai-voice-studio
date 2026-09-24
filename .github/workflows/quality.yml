@@ -15,6 +15,10 @@ jobs:
           python-version: "3.11"
       - name: Compile Python
         run: python -m compileall -q app backends
+      - name: Install test dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run core tests
+        run: pytest -q
       - name: Import shared modules
         run: |
           python -c "from app.config import BACKENDS; assert len(BACKENDS) == 4"
@@ -23,6 +27,8 @@ jobs:
       - name: Check forbidden model artifacts
         run: |
           ! find . -type f \( -name '*.safetensors' -o -name '*.pth' -o -name '*.pt' -o -name '*.ckpt' \) -not -path './.git/*' | grep .
+      - name: Compile tests
+        run: python -m compileall -q tests
       - name: Check required backend files
         run: |
           test -f backends/chatterbox_nepali/engine.py
