@@ -7,7 +7,6 @@ import tempfile
 import threading
 from pathlib import Path
 
-import torch
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -23,15 +22,32 @@ def engine_lock(backend: str) -> threading.Lock:
     with _ENGINE_LOCKS_GUARD:
         return _ENGINE_LOCKS.setdefault(backend, threading.Lock())
 
+def _torch():
+    try:
+        import torch
+        return torch
+    except ImportError:
+        return None
+
+
 def device_summary() -> str:
     forced = os.getenv("XTTS_NEPALI_DEVICE", "").strip().lower()
-    return forced or ("cuda" if torch.cuda.is_available() else "cpu")
+    if forced:
+        return forced
+    torch = _torch()
+    return "cuda" if torch is not None and torch.cuda.is_available() else "cpu"
 
 def runtime_summary() -> dict[str, str]:
-    gpu = "available" if torch.cuda.is_available() else "not available"
-    if torch.cuda.is_available():
-        gpu = f"available ({torch.cuda.get_device_name(0)})"
-    return {"python": platform.python_version(), "torch": getattr(torch, "__version__", "unknown"),
+    torch = _torch()
+    if torch is None:
+        torch_version = "not installed"
+        gpu = "unavailable (PyTorch not installed)"
+    else:
+        torch_version = getattr(torch, "__version__", "unknown")
+        gpu = "available" if torch.cuda.is_available() else "not available"
+        if torch.cuda.is_available():
+            gpu = f"available ({torch.cuda.get_device_name(0)})"
+    return {"python": platform.python_version(), "torch": torch_version,
             "device": device_summary(), "cuda": gpu,
             "hf_token": "configured" if os.getenv("HF_TOKEN") else "not configured",
             "output_dir": str(_OUTPUT_DIR)}
