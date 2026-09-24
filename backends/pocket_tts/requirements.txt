@@ -1,0 +1,5 @@
+# Isolated CPU-oriented Pocket-TTS environment.
+pocket-tts>=1.1
+huggingface_hub>=0.25
+numpy>=1.26
+torch>=2.5,<3
