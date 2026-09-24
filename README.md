@@ -35,6 +35,10 @@ The shared Gradio app lazy-loads and caches each backend in memory, so model ini
 - [x] Text length validation and live character counter
 - [x] Per-model failure isolation during comparison
 - [x] Lazy backend loading remains enabled
+- [x] Per-backend inference serialization
+- [x] Production logging and runtime/device diagnostics
+- [x] Docker and Hugging Face Spaces entrypoints
+- [x] Deployment and production test documentation
 
 ## Access and licensing
 
@@ -91,3 +95,6 @@ No third-party model checkpoints, voice recordings, or generated audio are commi
 The repository records all four adapters as implemented, but a final production release still requires runtime generation tests for all four environments, including gated-model authentication, Nepali pronunciation, reference-voice cloning, output WAV integrity, CPU/GPU behavior, and long-text handling.
 
 Pocket-TTS documents TTSModel.load_model, get_state_for_audio_prompt, and generate_audio, and its Nepali model card specifies a user-provided 3–5 second mono reference clip. The upstream Pocket-TTS project describes CPU-oriented operation and voice cloning.
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Hugging Face Spaces and selected-backend Docker deployment. The repository deliberately avoids a single untested environment containing all four model stacks.
