@@ -7,7 +7,7 @@ import gradio as gr
 import soundfile as sf
 
 from .config import BACKENDS
-from .diagnostics import backend_status
+from .diagnostics import backend_status, smoke_test
 
 _ENGINES = {}
 
@@ -111,6 +111,21 @@ def generate(
         raise gr.Error(f"{name}: {exc}") from exc
 
 
+def _diagnostic_rows():
+    return [
+        [row["name"], row["dependency"], row["installed"], row["access"]]
+        for row in backend_status()
+    ]
+
+
+def _smoke_result(status):
+    if status["status"] == "PASS":
+        return f"✅ **PASS** — {status['message']}"
+    if status["status"] == "BLOCKED":
+        return f"🟡 **BLOCKED** — {status['message']}"
+    return f"❌ **FAIL** — {status['message']}"
+
+
 def build_ui():
     with gr.Blocks(title="🇳🇵 Nepali AI Voice Studio") as demo:
         gr.Markdown("# 🇳🇵 Nepali AI Voice Studio")
@@ -151,73 +166,26 @@ def build_ui():
 
         with gr.Accordion("Advanced generation controls", open=False):
             with gr.Row():
-                exaggeration = gr.Slider(
-                    0,
-                    1,
-                    value=0.5,
-                    step=0.05,
-                    label="Chatterbox Exaggeration",
-                )
-                temperature = gr.Slider(
-                    0.1,
-                    1.5,
-                    value=0.65,
-                    step=0.05,
-                    label="Temperature",
-                )
+                exaggeration = gr.Slider(0, 1, value=0.5, step=0.05, label="Chatterbox Exaggeration")
+                temperature = gr.Slider(0.1, 1.5, value=0.65, step=0.05, label="Temperature")
             with gr.Row():
-                cfg_weight = gr.Slider(
-                    0,
-                    2,
-                    value=0.5,
-                    step=0.05,
-                    label="Chatterbox CFG Weight",
-                )
-                repetition_penalty = gr.Slider(
-                    1,
-                    8,
-                    value=5.0,
-                    step=0.1,
-                    label="XTTS Repetition Penalty",
-                )
+                cfg_weight = gr.Slider(0, 2, value=0.5, step=0.05, label="Chatterbox CFG Weight")
+                repetition_penalty = gr.Slider(1, 8, value=5.0, step=0.1, label="XTTS Repetition Penalty")
 
         generate_button = gr.Button("🔊 Generate Nepali Speech", variant="primary")
         output = gr.Audio(label="Generated Audio", type="filepath")
 
         def guarded_generate(*args):
-            (
-                text_value,
-                backend_value,
-                reference_value,
-                consent_value,
-                *controls,
-            ) = args
-
+            text_value, backend_value, reference_value, consent_value, *controls = args
             if not consent_value:
                 raise gr.Error(
-                    "Please confirm that you own the voice or have informed "
-                    "permission to clone it."
+                    "Please confirm that you own the voice or have informed permission to clone it."
                 )
-
-            return generate(
-                text_value,
-                backend_value,
-                reference_value,
-                *controls,
-            )
+            return generate(text_value, backend_value, reference_value, *controls)
 
         generate_button.click(
             guarded_generate,
-            [
-                text,
-                backend,
-                reference,
-                consent,
-                exaggeration,
-                temperature,
-                cfg_weight,
-                repetition_penalty,
-            ],
+            [text, backend, reference, consent, exaggeration, temperature, cfg_weight, repetition_penalty],
             output,
         )
 
@@ -225,20 +193,33 @@ def build_ui():
             diagnostics = gr.Dataframe(
                 headers=["Backend", "Dependency", "Installed", "Access"],
                 datatype=["str", "str", "str", "str"],
-                value=[
-                    [row["name"], row["dependency"], row["installed"], row["access"]]
-                    for row in backend_status()
-                ],
+                value=_diagnostic_rows(),
                 interactive=False,
                 label="Local readiness check",
             )
             refresh = gr.Button("🔄 Refresh diagnostics")
-            refresh.click(
-                lambda: [
-                    [row["name"], row["dependency"], row["installed"], row["access"]]
-                    for row in backend_status()
-                ],
-                outputs=diagnostics,
+            refresh.click(_diagnostic_rows, outputs=diagnostics)
+
+            gr.Markdown(
+                "Run a real smoke test below after uploading the same consented reference voice. "
+                "The test downloads/loads the selected model and generates a short Nepali sentence."
+            )
+            smoke_backend = gr.Dropdown(
+                choices=[(v.name, k) for k, v in BACKENDS.items()],
+                value="chatterbox_nepali",
+                label="Backend to test",
+            )
+            smoke_reference = gr.Audio(
+                label="Consented reference voice for smoke test",
+                type="filepath",
+                sources=["upload", "microphone"],
+            )
+            smoke_button = gr.Button("🧪 Test selected model")
+            smoke_output = gr.Markdown()
+            smoke_button.click(
+                lambda b, r: _smoke_result(smoke_test(b, r)),
+                [smoke_backend, smoke_reference],
+                smoke_output,
             )
 
         gr.Markdown(
