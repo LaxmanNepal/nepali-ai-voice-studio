@@ -1,0 +1,8 @@
+# Shared application dependencies only.
+# Model-specific dependencies belong in each backend's requirements file.
+
+gradio>=5,<7
+numpy>=1.26
+soundfile>=0.12
+librosa>=0.10
+huggingface_hub>=0.25
