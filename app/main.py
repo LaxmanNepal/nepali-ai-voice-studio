@@ -222,6 +222,76 @@ def build_ui():
                 smoke_output,
             )
 
+        with gr.Accordion("🔬 Compare all models", open=False):
+            gr.Markdown(
+                "Generate the same Nepali text with every backend using one consented "
+                "reference voice. Models that are unavailable are reported individually."
+            )
+            compare_text = gr.Textbox(
+                label="Comparison text",
+                value="नमस्ते! यो नेपाली AI आवाज परीक्षण हो।",
+                lines=3,
+            )
+            compare_reference = gr.Audio(
+                label="Consented reference voice",
+                type="filepath",
+                sources=["upload", "microphone"],
+            )
+            compare_consent = gr.Checkbox(
+                label="I own this voice or have informed permission to clone it.",
+                value=False,
+            )
+            compare_button = gr.Button("⚖️ Generate with all 4 models")
+            compare_results = gr.Dataframe(
+                headers=["Backend", "Status", "Time", "Audio"],
+                datatype=["str", "str", "str", "str"],
+                interactive=False,
+            )
+
+            def compare_all(text_value, reference_value, consent_value):
+                if not consent_value:
+                    raise gr.Error(
+                        "Please confirm that you own the voice or have informed permission to clone it."
+                    )
+                if not text_value or not text_value.strip():
+                    raise gr.Error("Please enter comparison text.")
+                reference_path = _validate_reference(reference_value)
+                rows = []
+                for backend_id, info in BACKENDS.items():
+                    import time
+                    started = time.perf_counter()
+                    try:
+                        engine = _get_engine(backend_id)
+                        if backend_id == "chatterbox_nepali":
+                            wav, sr = engine.generate(
+                                text=text_value, reference_audio=reference_path,
+                                exaggeration=exaggeration, temperature=temperature,
+                                cfg_weight=cfg_weight,
+                            )
+                        elif backend_id == "swarlekha":
+                            wav, sr = engine.generate(text_value, reference_path)
+                        elif backend_id == "xtts_nepali":
+                            wav, sr = engine.generate(
+                                text_value, reference_path,
+                                temperature=temperature,
+                                repetition_penalty=repetition_penalty,
+                            )
+                        else:
+                            wav, sr = engine.generate(text_value, reference_path)
+                        audio_path = _write_wav(wav, sr)
+                        elapsed = time.perf_counter() - started
+                        rows.append([info.name, "PASS", f"{elapsed:.1f}s", audio_path])
+                    except Exception as exc:
+                        elapsed = time.perf_counter() - started
+                        rows.append([info.name, f"FAIL: {type(exc).__name__}", f"{elapsed:.1f}s", None])
+                return rows
+
+            compare_button.click(
+                compare_all,
+                [compare_text, compare_reference, compare_consent],
+                compare_results,
+            )
+
         gr.Markdown(
             "⚠️ **Responsible use:** Do not use this tool for impersonation, "
             "fraud, deception, or to present synthetic speech as an authentic recording."
