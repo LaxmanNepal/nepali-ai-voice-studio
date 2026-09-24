@@ -1,56 +1,88 @@
 # 🇳🇵 Nepali AI Voice Studio
 
-A unified Gradio-based voice studio architecture for Nepali text-to-speech and voice cloning.
+A unified Gradio voice studio for Nepali text-to-speech and voice cloning, with model-specific dependencies and licenses kept isolated.
 
-## Engines
+## Backends
 
-- Chatterbox Nepali
-- Swarlekha
-- XTTS-v2 Nepali
-- Pocket-TTS Nepali
+| Backend | Nepali | Voice cloning | Runtime |
+|---|---|---|---|
+| Chatterbox Nepali | Yes | Yes | GPU-oriented |
+| Swarlekha | Yes + English | Yes | Model-dependent |
+| XTTS-v2 Nepali | Yes | Yes | CPU/GPU |
+| Pocket-TTS Nepali | Yes | Yes | CPU-oriented |
 
 ## Architecture
 
-Each model is implemented as an isolated backend so that model-specific dependencies, checkpoints, tokenizers, and licenses are not mixed.
+Each backend owns its inference adapter and dependency file. Model weights are never committed to Git. Gated or licensed checkpoints are downloaded at runtime into the Hugging Face cache.
 
-Model weights are **not committed to Git**. They are downloaded/cached at runtime from their upstream Hugging Face repositories where access and licensing permit.
+The shared Gradio app lazy-loads and caches each backend in memory, so model initialization is not repeated for every generation request.
 
-## Repository structure
+## Current status
 
-```
-app/                  # Shared UI, routing and utilities
-backends/             # One isolated adapter per TTS engine
-models/               # Runtime model cache documentation; no weights
-scripts/              # Model download/setup helpers
-licenses/             # Third-party license notices
-examples/             # Safe text examples
-```
-
-## Current implementation status
-
-- [x] Shared Gradio shell
-- [x] Isolated Chatterbox Nepali adapter
-- [x] Runtime Hugging Face checkpoint loading
-- [x] Nepali voice-cloning controls
+- [x] Shared Gradio UI
+- [x] Chatterbox Nepali adapter
 - [x] Swarlekha adapter
 - [x] XTTS-v2 Nepali adapter
-- [ ] Pocket-TTS Nepali adapter
-- [ ] Cross-backend test matrix
+- [x] Pocket-TTS Nepali adapter
+- [x] Runtime-only model weights
+- [x] In-memory backend caching
+- [x] Consent warning/reference-audio requirement
+- [x] Separate dependency files
+- [x] License matrix and third-party notices
+- [ ] Full runtime test matrix on each backend environment
 
-### XTTS-v2 Nepali
-
-The XTTS backend uses `Oshara/xtts-v2-nepali` and defaults to its recommended `epoch-10` checkpoint. The upstream model card provides a direct `XttsConfig` / `Xtts` loading path and 24 kHz output. citeturn0search1turn0search8
-
-**License warning:** XTTS-v2 Nepali inherits the Coqui Public Model License (CPML). The CPML terms state that the model and its outputs are licensed for non-commercial purposes unless additional rights are obtained. Review the current upstream license before using this backend for monetized production or distributing outputs. citeturn0search0turn0search1
-
-The app does not commit XTTS weights to Git.
+## Access and licensing
 
 ### Chatterbox Nepali
+Imbatmann/chatterbox-nepali-tts is gated. Accept the upstream access conditions and authenticate if required.
 
-The first working backend uses the gated Imbatmann Nepali checkpoint with the Chatterbox multilingual runtime. Before first use, accept the upstream model access conditions on Hugging Face and authenticate locally if required. The app never stores the checkpoint in Git.
+### Swarlekha
+indra17/swarlekha is documented as MIT and supports Nepali/English voice cloning. Keep its upstream notices with deployments.
 
-## License
+### XTTS-v2 Nepali
+Oshara/xtts-v2-nepali defaults to epoch-10. Its checkpoint is subject to the Coqui Public Model License. Do not assume the application's license applies to the model or its outputs.
 
-The application code has its own license. Third-party model code, weights, datasets, tokenizers and dependencies remain subject to their respective upstream licenses. See `MODEL_LICENSES.md` and `THIRD_PARTY_NOTICES.md`.
+### Pocket-TTS Nepali
+himalaya-ai/pocket-tts-nepali-6l is gated and CC-BY-4.0. The model card requires attribution and says to use a speaker recording only with informed consent. It is intended for Nepali CPU-oriented speech synthesis.
 
-> This project does not redistribute third-party voice recordings or model checkpoints unless their applicable license and access terms explicitly permit redistribution.
+## Running
+
+Install the shared shell first:
+
+    pip install -r requirements.txt
+
+Then install one backend environment at a time:
+
+    pip install -r backends/chatterbox_nepali/requirements.txt
+
+or:
+
+    pip install -r backends/swarlekha/requirements.txt
+
+or:
+
+    pip install -r backends/xtts_nepali/requirements.txt
+
+or:
+
+    pip install -r backends/pocket_tts/requirements.txt
+
+Authenticate Hugging Face when a gated model requires it, then:
+
+    python -m app.main
+
+Because backend dependency stacks can conflict, the recommended production layout is one virtual environment/container per backend with the same shared UI layer.
+
+## Reference audio
+
+Use only a voice recording you own or have explicit permission to clone. Do not present generated speech as an authentic recording of a real person.
+
+## Repository policy
+
+No third-party model checkpoints, voice recordings, or generated audio are committed. See MODEL_LICENSES.md, THIRD_PARTY_NOTICES.md, and each backend README.
+
+## Test matrix
+
+The repository records all four adapters as implemented, but a final production release still requires runtime generation tests for all four environments, including gated-model authentication, Nepali pronunciation, reference-voice cloning, output WAV integrity, CPU/GPU behavior, and long-text handling.
+
+Pocket-TTS documents TTSModel.load_model, get_state_for_audio_prompt, and generate_audio, and its Nepali model card specifies a user-provided 3–5 second mono reference clip. The upstream Pocket-TTS project describes CPU-oriented operation and voice cloning.
