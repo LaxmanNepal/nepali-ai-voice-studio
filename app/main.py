@@ -149,6 +149,8 @@ def build_ui():
                         "**Workflow:** choose a model → enter Nepali text → add reference voice → confirm consent → generate.",
                         scale=3
                     )
+                backend_info = gr.Markdown("**Selected model:** Chatterbox Nepali · MIT · GPU recommended · gated Hugging Face model")
+                backend.change(lambda b: "**Selected model:** {} · {} · {} · {}".format(BACKENDS[b].name, BACKENDS[b].license, BACKENDS[b].hardware, BACKENDS[b].access), backend, backend_info)
                 text = gr.Textbox(
                     label="Nepali text",
                     placeholder="नमस्ते! मेरो नाम लक्ष्मण हो। नेपाल सुन्दर देश हो।",
@@ -175,18 +177,21 @@ def build_ui():
                         repetition_penalty = gr.Slider(1, 8, value=5.0, step=0.1, label="XTTS Repetition Penalty")
 
                 generate_button = gr.Button("🔊 Generate Nepali Speech", variant="primary")
+                generation_status = gr.Markdown()
                 output = gr.Audio(label="Generated Audio", type="filepath")
+                download_output = gr.File(label="Download WAV")
 
                 def guarded_generate(*args):
                     text_value, backend_value, reference_value, consent_value, *controls = args
                     if not consent_value:
                         raise gr.Error("Please confirm that you own the voice or have informed permission to clone it.")
-                    return generate(text_value, backend_value, reference_value, *controls)
+                    result = generate(text_value, backend_value, reference_value, *controls)
+                    return result, result, "**{}** generated successfully.".format(BACKENDS[backend_value].name), "✅ **Generation complete.**"
 
                 generate_button.click(
                     guarded_generate,
                     [text, backend, reference, consent, exaggeration, temperature, cfg_weight, repetition_penalty],
-                    output,
+                    [output, download_output, generation_status, generation_status],
                 )
 
             with gr.Tab("⚖️ Compare"):
