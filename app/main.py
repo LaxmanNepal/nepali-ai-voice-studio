@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
 
 import gradio as gr
@@ -10,6 +11,7 @@ from .config import BACKENDS
 from .diagnostics import backend_status, smoke_test
 
 _ENGINES = {}
+MAX_TEXT_CHARS = 2500
 
 
 def _get_engine(backend):
@@ -41,68 +43,53 @@ def _write_wav(wav, sample_rate):
 def _validate_reference(reference_audio):
     if not reference_audio:
         raise gr.Error("Please provide a consented reference voice recording.")
-
     path = Path(reference_audio)
     if not path.exists():
         raise gr.Error("Reference audio file could not be found.")
-
     try:
         info = sf.info(str(path))
     except Exception as exc:
-        raise gr.Error(
-            "Reference audio could not be read. Please upload a WAV, FLAC, "
-            "or another supported audio file."
-        ) from exc
-
+        raise gr.Error("Reference audio could not be read. Upload WAV, FLAC, or another supported file.") from exc
     if info.frames == 0 or info.duration <= 0:
         raise gr.Error("Reference audio is empty.")
     if info.duration < 2:
         raise gr.Error("Please use a clear reference recording of at least 2 seconds.")
     if info.duration > 30:
         raise gr.Error("Please keep the reference recording under 30 seconds.")
-
     return str(path)
 
 
-def generate(
-    text,
-    backend,
-    reference_audio,
-    exaggeration,
-    temperature,
-    cfg_weight,
-    repetition_penalty,
-):
-    if not text or not text.strip():
+def _validate_text(text):
+    value = (text or "").replace("\ufeff", "").replace("\u200b", "").strip()
+    if not value:
         raise gr.Error("Please enter Nepali text.")
+    if len(value) > MAX_TEXT_CHARS:
+        raise gr.Error(f"Text is too long. Keep each generation under {MAX_TEXT_CHARS} characters.")
+    return value
 
+
+def _generate_with_engine(backend, text, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty):
+    engine = _get_engine(backend)
+    if backend == "chatterbox_nepali":
+        return engine.generate(text=text, reference_audio=reference_audio, exaggeration=exaggeration,
+                               temperature=temperature, cfg_weight=cfg_weight)
+    if backend == "swarlekha":
+        return engine.generate(text, reference_audio)
+    if backend == "xtts_nepali":
+        return engine.generate(text, reference_audio, temperature=temperature,
+                               repetition_penalty=repetition_penalty)
+    if backend == "pocket_tts":
+        return engine.generate(text, reference_audio)
+    raise ValueError(f"Unsupported backend: {backend}")
+
+
+def generate(text, backend, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty):
+    text = _validate_text(text)
     reference_audio = _validate_reference(reference_audio)
-
     try:
-        engine = _get_engine(backend)
-
-        if backend == "chatterbox_nepali":
-            wav, sample_rate = engine.generate(
-                text=text,
-                reference_audio=reference_audio,
-                exaggeration=exaggeration,
-                temperature=temperature,
-                cfg_weight=cfg_weight,
-            )
-        elif backend == "swarlekha":
-            wav, sample_rate = engine.generate(text, reference_audio)
-        elif backend == "xtts_nepali":
-            wav, sample_rate = engine.generate(
-                text,
-                reference_audio,
-                temperature=temperature,
-                repetition_penalty=repetition_penalty,
-            )
-        elif backend == "pocket_tts":
-            wav, sample_rate = engine.generate(text, reference_audio)
-        else:
-            raise ValueError(f"Unsupported backend: {backend}")
-
+        wav, sample_rate = _generate_with_engine(
+            backend, text, reference_audio, exaggeration, temperature, cfg_weight, repetition_penalty
+        )
         return _write_wav(wav, sample_rate)
     except gr.Error:
         raise
@@ -126,177 +113,150 @@ def _smoke_result(status):
     return f"❌ **FAIL** — {status['message']}"
 
 
+def _model_rows():
+    return [
+        [v.name, v.description, ", ".join(v.languages).upper(), v.license, v.hardware, v.access]
+        for v in BACKENDS.values()
+    ]
+
+
 def build_ui():
-    with gr.Blocks(title="🇳🇵 Nepali AI Voice Studio") as demo:
-        gr.Markdown("# 🇳🇵 Nepali AI Voice Studio")
+    css = """
+    .studio-hero { padding: 1rem 0 .5rem; }
+    .studio-note { border-radius: 12px; }
+    .model-card { min-height: 150px; }
+    """
+    with gr.Blocks(title="🇳🇵 Nepali AI Voice Studio", css=css) as demo:
         gr.Markdown(
-            "Generate Nepali speech with isolated voice models. "
-            "Use only voices you own or have informed permission to clone."
+            "# 🇳🇵 Nepali AI Voice Studio\n"
+            "One interface for four isolated Nepali voice backends. "
+            "Use only a voice you own or have informed permission to clone."
         )
 
-        with gr.Row():
-            backend = gr.Dropdown(
-                choices=[(v.name, k) for k, v in BACKENDS.items()],
-                value="chatterbox_nepali",
-                label="Model",
-                scale=2,
-            )
-            gr.Markdown(
-                "**Tip:** Chatterbox and XTTS use the advanced controls below. "
-                "Swarlekha and Pocket-TTS use their documented defaults.",
-                scale=3,
-            )
-
-        text = gr.Textbox(
-            label="Nepali Text",
-            placeholder="नमस्ते! मेरो नाम लक्ष्मण हो। नेपाल सुन्दर देश हो।",
-            lines=7,
-        )
-
-        reference = gr.Audio(
-            label="Reference Voice — 3–10 seconds recommended",
-            type="filepath",
-            sources=["upload", "microphone"],
-        )
-
-        consent = gr.Checkbox(
-            label="I own this voice or have informed permission to clone it.",
-            value=False,
-        )
-
-        with gr.Accordion("Advanced generation controls", open=False):
-            with gr.Row():
-                exaggeration = gr.Slider(0, 1, value=0.5, step=0.05, label="Chatterbox Exaggeration")
-                temperature = gr.Slider(0.1, 1.5, value=0.65, step=0.05, label="Temperature")
-            with gr.Row():
-                cfg_weight = gr.Slider(0, 2, value=0.5, step=0.05, label="Chatterbox CFG Weight")
-                repetition_penalty = gr.Slider(1, 8, value=5.0, step=0.1, label="XTTS Repetition Penalty")
-
-        generate_button = gr.Button("🔊 Generate Nepali Speech", variant="primary")
-        output = gr.Audio(label="Generated Audio", type="filepath")
-
-        def guarded_generate(*args):
-            text_value, backend_value, reference_value, consent_value, *controls = args
-            if not consent_value:
-                raise gr.Error(
-                    "Please confirm that you own the voice or have informed permission to clone it."
-                )
-            return generate(text_value, backend_value, reference_value, *controls)
-
-        generate_button.click(
-            guarded_generate,
-            [text, backend, reference, consent, exaggeration, temperature, cfg_weight, repetition_penalty],
-            output,
-        )
-
-        with gr.Accordion("🩺 Backend diagnostics", open=False):
-            diagnostics = gr.Dataframe(
-                headers=["Backend", "Dependency", "Installed", "Access"],
-                datatype=["str", "str", "str", "str"],
-                value=_diagnostic_rows(),
-                interactive=False,
-                label="Local readiness check",
-            )
-            refresh = gr.Button("🔄 Refresh diagnostics")
-            refresh.click(_diagnostic_rows, outputs=diagnostics)
-
-            gr.Markdown(
-                "Run a real smoke test below after uploading the same consented reference voice. "
-                "The test downloads/loads the selected model and generates a short Nepali sentence."
-            )
-            smoke_backend = gr.Dropdown(
-                choices=[(v.name, k) for k, v in BACKENDS.items()],
-                value="chatterbox_nepali",
-                label="Backend to test",
-            )
-            smoke_reference = gr.Audio(
-                label="Consented reference voice for smoke test",
-                type="filepath",
-                sources=["upload", "microphone"],
-            )
-            smoke_button = gr.Button("🧪 Test selected model")
-            smoke_output = gr.Markdown()
-            smoke_button.click(
-                lambda b, r: _smoke_result(smoke_test(b, r)),
-                [smoke_backend, smoke_reference],
-                smoke_output,
-            )
-
-        with gr.Accordion("🔬 Compare all models", open=False):
-            gr.Markdown(
-                "Generate the same Nepali text with every backend using one consented "
-                "reference voice. Models that are unavailable are reported individually."
-            )
-            compare_text = gr.Textbox(
-                label="Comparison text",
-                value="नमस्ते! यो नेपाली AI आवाज परीक्षण हो।",
-                lines=3,
-            )
-            compare_reference = gr.Audio(
-                label="Consented reference voice",
-                type="filepath",
-                sources=["upload", "microphone"],
-            )
-            compare_consent = gr.Checkbox(
-                label="I own this voice or have informed permission to clone it.",
-                value=False,
-            )
-            compare_button = gr.Button("⚖️ Generate with all 4 models")
-            compare_results = gr.Dataframe(
-                headers=["Backend", "Status", "Time", "Audio"],
-                datatype=["str", "str", "str", "str"],
-                interactive=False,
-            )
-
-            def compare_all(text_value, reference_value, consent_value):
-                if not consent_value:
-                    raise gr.Error(
-                        "Please confirm that you own the voice or have informed permission to clone it."
+        with gr.Tabs():
+            with gr.Tab("🎙️ Generate"):
+                with gr.Row():
+                    backend = gr.Dropdown(
+                        choices=[(v.name, k) for k, v in BACKENDS.items()],
+                        value="chatterbox_nepali", label="Model", scale=2
                     )
-                if not text_value or not text_value.strip():
-                    raise gr.Error("Please enter comparison text.")
-                reference_path = _validate_reference(reference_value)
-                rows = []
-                for backend_id, info in BACKENDS.items():
-                    import time
-                    started = time.perf_counter()
-                    try:
-                        engine = _get_engine(backend_id)
-                        if backend_id == "chatterbox_nepali":
-                            wav, sr = engine.generate(
-                                text=text_value, reference_audio=reference_path,
-                                exaggeration=exaggeration, temperature=temperature,
-                                cfg_weight=cfg_weight,
-                            )
-                        elif backend_id == "swarlekha":
-                            wav, sr = engine.generate(text_value, reference_path)
-                        elif backend_id == "xtts_nepali":
-                            wav, sr = engine.generate(
-                                text_value, reference_path,
-                                temperature=temperature,
-                                repetition_penalty=repetition_penalty,
-                            )
-                        else:
-                            wav, sr = engine.generate(text_value, reference_path)
-                        audio_path = _write_wav(wav, sr)
-                        elapsed = time.perf_counter() - started
-                        rows.append([info.name, "PASS", f"{elapsed:.1f}s", audio_path])
-                    except Exception as exc:
-                        elapsed = time.perf_counter() - started
-                        rows.append([info.name, f"FAIL: {type(exc).__name__}", f"{elapsed:.1f}s", None])
-                return rows
+                    gr.Markdown(
+                        "**Workflow:** choose a model → enter Nepali text → add reference voice → confirm consent → generate.",
+                        scale=3
+                    )
+                text = gr.Textbox(
+                    label="Nepali text",
+                    placeholder="नमस्ते! मेरो नाम लक्ष्मण हो। नेपाल सुन्दर देश हो।",
+                    lines=7,
+                    max_lines=12,
+                )
+                char_count = gr.Markdown("0 / 2500 characters")
+                text.input(lambda x: f"{len(x or '')} / {MAX_TEXT_CHARS} characters", text, char_count)
 
-            compare_button.click(
-                compare_all,
-                [compare_text, compare_reference, compare_consent],
-                compare_results,
-            )
+                reference = gr.Audio(
+                    label="Reference Voice — 3–10 seconds recommended",
+                    type="filepath", sources=["upload", "microphone"]
+                )
+                consent = gr.Checkbox(
+                    label="I own this voice or have informed permission to clone it.", value=False
+                )
+
+                with gr.Accordion("Advanced generation controls", open=False):
+                    with gr.Row():
+                        exaggeration = gr.Slider(0, 1, value=0.5, step=0.05, label="Chatterbox Exaggeration")
+                        temperature = gr.Slider(0.1, 1.5, value=0.65, step=0.05, label="Temperature")
+                    with gr.Row():
+                        cfg_weight = gr.Slider(0, 2, value=0.5, step=0.05, label="Chatterbox CFG Weight")
+                        repetition_penalty = gr.Slider(1, 8, value=5.0, step=0.1, label="XTTS Repetition Penalty")
+
+                generate_button = gr.Button("🔊 Generate Nepali Speech", variant="primary")
+                output = gr.Audio(label="Generated Audio", type="filepath")
+
+                def guarded_generate(*args):
+                    text_value, backend_value, reference_value, consent_value, *controls = args
+                    if not consent_value:
+                        raise gr.Error("Please confirm that you own the voice or have informed permission to clone it.")
+                    return generate(text_value, backend_value, reference_value, *controls)
+
+                generate_button.click(
+                    guarded_generate,
+                    [text, backend, reference, consent, exaggeration, temperature, cfg_weight, repetition_penalty],
+                    output,
+                )
+
+            with gr.Tab("⚖️ Compare"):
+                gr.Markdown("Generate identical text with all four backends. Each model is isolated: one failure does not cancel the others.")
+                compare_text = gr.Textbox(label="Comparison text", value="नमस्ते! यो नेपाली AI आवाज परीक्षण हो।", lines=3)
+                compare_reference = gr.Audio(label="Consented reference voice", type="filepath", sources=["upload", "microphone"])
+                compare_consent = gr.Checkbox(label="I own this voice or have informed permission to clone it.", value=False)
+                compare_button = gr.Button("⚖️ Generate with all 4 models", variant="primary")
+                compare_status = gr.Markdown()
+                compare_outputs = []
+                for backend_id, info in BACKENDS.items():
+                    with gr.Group():
+                        gr.Markdown(f"### {info.name}")
+                        gr.Markdown(f"{info.description} · {info.license} · {info.hardware}")
+                        compare_outputs.append(gr.Audio(label="Audio", type="filepath"))
+                def compare_all(text_value, reference_value, consent_value, exag, temp, cfg, rep):
+                    if not consent_value:
+                        raise gr.Error("Please confirm that you own the voice or have informed permission to clone it.")
+                    text_value = _validate_text(text_value)
+                    reference_path = _validate_reference(reference_value)
+                    audios = []
+                    messages = []
+                    for backend_id, info in BACKENDS.items():
+                        started = time.perf_counter()
+                        try:
+                            wav, sr = _generate_with_engine(
+                                backend_id, text_value, reference_path, exag, temp, cfg, rep
+                            )
+                            audios.append(_write_wav(wav, sr))
+                            messages.append(f"✅ **{info.name}: PASS** — {time.perf_counter()-started:.1f}s")
+                        except Exception as exc:
+                            audios.append(None)
+                            messages.append(f"❌ **{info.name}: FAIL** — {type(exc).__name__}: {exc}")
+                    return audios + ["\n".join(messages)]
+                compare_button.click(
+                    compare_all,
+                    [compare_text, compare_reference, compare_consent, exaggeration, temperature, cfg_weight, repetition_penalty],
+                    compare_outputs + [compare_status],
+                )
+
+            with gr.Tab("📚 Models"):
+                gr.Markdown("### Backend matrix")
+                gr.Dataframe(
+                    headers=["Backend", "Purpose", "Languages", "License", "Hardware", "Access"],
+                    datatype=["str"] * 6, value=_model_rows(), interactive=False
+                )
+                gr.Markdown(
+                    "Model licenses apply to upstream checkpoints and are separate from this application's source code. "
+                    "Review MODEL_LICENSES.md and THIRD_PARTY_NOTICES.md before redistribution."
+                )
+
+            with gr.Tab("🩺 Diagnostics"):
+                diagnostics = gr.Dataframe(
+                    headers=["Backend", "Dependency", "Installed", "Access"],
+                    datatype=["str"] * 4, value=_diagnostic_rows(), interactive=False
+                )
+                refresh = gr.Button("🔄 Refresh diagnostics")
+                refresh.click(_diagnostic_rows, outputs=diagnostics)
+                gr.Markdown("A smoke test performs real model loading and a short Nepali generation.")
+                smoke_backend = gr.Dropdown(
+                    choices=[(v.name, k) for k, v in BACKENDS.items()],
+                    value="chatterbox_nepali", label="Backend to test"
+                )
+                smoke_reference = gr.Audio(label="Consented reference voice", type="filepath", sources=["upload", "microphone"])
+                smoke_button = gr.Button("🧪 Test selected model")
+                smoke_output = gr.Markdown()
+                smoke_button.click(
+                    lambda b, r: _smoke_result(smoke_test(b, r)),
+                    [smoke_backend, smoke_reference], smoke_output
+                )
 
         gr.Markdown(
-            "⚠️ **Responsible use:** Do not use this tool for impersonation, "
-            "fraud, deception, or to present synthetic speech as an authentic recording."
+            "⚠️ **Responsible use:** Use voice cloning only with ownership or informed permission. "
+            "Do not use generated speech for impersonation, fraud, deception, or to present synthetic speech as authentic."
         )
-
     return demo
 
 
