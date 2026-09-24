@@ -129,7 +129,7 @@ def build_ui():
     css = """
     .studio-hero { padding: 1rem 0 .5rem; }
     .studio-note { border-radius: 12px; }
-    .model-card { min-height: 150px; }
+    .model-card { min-height: 90px; padding: .75rem; border-radius: 12px; }
     """
     with gr.Blocks(title="🇳🇵 Nepali AI Voice Studio", css=css) as demo:
         gr.Markdown(
@@ -222,11 +222,19 @@ def build_ui():
                                 wav, sr = _generate_with_engine(
                                     backend_id, text_value, reference_path, exag, temp, cfg, rep
                                 )
-                            audios.append(_write_wav(wav, sr))
-                            messages.append(f"✅ **{info.name}: PASS** — {time.perf_counter()-started:.1f}s")
+                            path = _write_wav(wav, sr)
+                            elapsed = time.perf_counter() - started
+                            try:
+                                audio_info = sf.info(path)
+                                detail = "{:.2f}s audio · {:,} Hz · {:.1f}s generation".format(audio_info.duration, audio_info.samplerate, elapsed)
+                            except Exception:
+                                detail = "{:.1f}s generation".format(elapsed)
+                            audios.append(path)
+                            messages.append("✅ **{}: PASS** — {}".format(info.name, detail))
                         except Exception as exc:
                             audios.append(None)
-                            messages.append(f"❌ **{info.name}: FAIL** — {type(exc).__name__}: {exc}")
+                            log_generation_error(backend_id, exc)
+                            messages.append("❌ **{}: FAIL** — Check Diagnostics and backend requirements.".format(info.name))
                     return audios + ["\n".join(messages)]
                 compare_button.click(
                     compare_all,
