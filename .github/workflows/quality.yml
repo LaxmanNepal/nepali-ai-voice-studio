@@ -1,0 +1,31 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Python
+        run: python -m compileall -q app backends
+      - name: Import shared modules
+        run: |
+          python -c "from app.config import BACKENDS; assert len(BACKENDS) == 4"
+          python -c "from app.router import choose_backend; assert choose_backend('नमस्ते') == 'chatterbox_nepali'"
+          python -c "from app.router import choose_backend; assert choose_backend('Hello') == 'swarlekha'"
+      - name: Check forbidden model artifacts
+        run: |
+          ! find . -type f \( -name '*.safetensors' -o -name '*.pth' -o -name '*.pt' -o -name '*.ckpt' \) -not -path './.git/*' | grep .
+      - name: Check required backend files
+        run: |
+          test -f backends/chatterbox_nepali/engine.py
+          test -f backends/swarlekha/engine.py
+          test -f backends/xtts_nepali/engine.py
+          test -f backends/pocket_tts/engine.py
