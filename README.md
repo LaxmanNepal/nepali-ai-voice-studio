@@ -32,7 +32,7 @@ examples/             # Safe text examples
 - [x] Isolated Chatterbox Nepali adapter
 - [x] Runtime Hugging Face checkpoint loading
 - [x] Nepali voice-cloning controls
-- [ ] Swarlekha adapter
+- [x] Swarlekha adapter
 - [ ] XTTS-v2 Nepali adapter
 - [ ] Pocket-TTS Nepali adapter
 - [ ] Cross-backend test matrix
