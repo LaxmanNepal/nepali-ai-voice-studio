@@ -26,6 +26,21 @@ licenses/             # Third-party license notices
 examples/             # Safe text examples
 ```
 
+## Current implementation status
+
+- [x] Shared Gradio shell
+- [x] Isolated Chatterbox Nepali adapter
+- [x] Runtime Hugging Face checkpoint loading
+- [x] Nepali voice-cloning controls
+- [ ] Swarlekha adapter
+- [ ] XTTS-v2 Nepali adapter
+- [ ] Pocket-TTS Nepali adapter
+- [ ] Cross-backend test matrix
+
+### Chatterbox Nepali
+
+The first working backend uses the gated Imbatmann Nepali checkpoint with the Chatterbox multilingual runtime. Before first use, accept the upstream model access conditions on Hugging Face and authenticate locally if required. The app never stores the checkpoint in Git.
+
 ## License
 
 The application code will have its own license. Third-party model code, weights, datasets, tokenizers and dependencies remain subject to their respective upstream licenses. See `MODEL_LICENSES.md` and `THIRD_PARTY_NOTICES.md`.
