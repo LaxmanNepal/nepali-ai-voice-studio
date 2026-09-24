@@ -24,6 +24,17 @@ def generate(text, backend, reference_audio, exaggeration, temperature, cfg_weig
             return _generate_chatterbox(text, reference_audio, exaggeration, temperature, cfg_weight)
         except Exception as exc:
             raise gr.Error(str(exc)) from exc
+    if backend == "swarlekha":
+        try:
+            from backends.swarlekha import SwarlekhaEngine
+            engine = SwarlekhaEngine()
+            wav, sample_rate = engine.generate(text, reference_audio)
+            output = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            output.close()
+            sf.write(output.name, wav.squeeze().numpy(), sample_rate)
+            return output.name
+        except Exception as exc:
+            raise gr.Error(str(exc)) from exc
     raise gr.Error(f"{BACKENDS[backend].name} is listed but its isolated backend is not enabled yet.")
 
 
