@@ -3,16 +3,33 @@ from __future__ import annotations
 import importlib.util
 import os
 import time
+import importlib.metadata
 
 from .config import BACKENDS
+from .runtime import runtime_summary
 
 
 def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def _package_version(name: str) -> str:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return "not installed"
+
+
+def _state(installed: bool, access: str) -> str:
+    if not installed:
+        return "Needs setup"
+    if "not configured" in access.lower():
+        return "Needs HF auth"
+    return "Ready"
+
+
 def backend_status() -> list[dict[str, str]]:
-    return [
+    rows = [
         {
             "id": "chatterbox_nepali",
             "name": BACKENDS["chatterbox_nepali"].name,
@@ -42,6 +59,17 @@ def backend_status() -> list[dict[str, str]]:
             "access": "HF_TOKEN configured" if os.getenv("HF_TOKEN") else "HF_TOKEN not configured",
         },
     ]
+    packages = {"chatterbox_nepali": "chatterbox-tts", "swarlekha": "swarlekha", "xtts_nepali": "TTS", "pocket_tts": "pocket-tts"}
+    for row in rows:
+        row["version"] = _package_version(packages[row["id"]])
+        row["state"] = _state(row["installed"] == "ready", row["access"])
+    return rows
+
+
+def diagnostic_summary() -> str:
+    runtime = runtime_summary()
+    ready = sum(1 for row in backend_status() if row["state"] == "Ready")
+    return "**Runtime:** Python {} · PyTorch {} · Device: {} · CUDA: {}  \\n**Backends ready:** {}/{} · HF token: {}".format(runtime["python"], runtime["torch"], runtime["device"], runtime["cuda"], ready, len(BACKENDS), runtime["hf_token"])
 
 
 def smoke_test(backend: str, reference_audio: str | None = None) -> dict[str, str]:
