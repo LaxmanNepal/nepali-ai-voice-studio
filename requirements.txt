@@ -6,3 +6,6 @@ numpy>=1.26
 soundfile>=0.12
 librosa>=0.10
 huggingface_hub>=0.25
+
+# Shared inference runtime used by the voice backends.
+torch>=2.5,<3
