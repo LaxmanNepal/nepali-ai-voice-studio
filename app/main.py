@@ -147,7 +147,6 @@ def build_ui():
                     )
                     gr.Markdown(
                         "**Workflow:** choose a model → enter Nepali text → add reference voice → confirm consent → generate.",
-                        scale=3
                     )
                 backend_info = gr.Markdown("**Selected model:** Chatterbox Nepali · MIT · GPU recommended · gated Hugging Face model")
                 backend.change(lambda b: "**Selected model:** {} · {} · {} · {}".format(BACKENDS[b].name, BACKENDS[b].license, BACKENDS[b].hardware, BACKENDS[b].access), backend, backend_info)
